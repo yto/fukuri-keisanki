@@ -4,19 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Japanese compound interest calculator PWA (複利計算機). It runs entirely in the browser — no build step, no package manager, no server. Open `compound-interest.html` directly in a browser or serve it with any static file server.
+A Japanese compound interest calculator PWA (複利計算機). It runs entirely in the browser — no build step, no package manager, no server. Published at https://yto.github.io/fukuri-keisanki/
 
 ## Files
 
-- `compound-interest.html` — the canonical app (self-contained: HTML + CSS + JS in one file)
+- `index.html` — the canonical app (self-contained: HTML + CSS + JS in one file)
 - `compound-interest-1.html` through `compound-interest-6.html` — iteration snapshots; not served by the PWA
-- `manifest.json` — PWA manifest (name, icons, theme color)
-- `sw.js` — Service Worker: network-first for HTML, cache-first for JS/icons; cache key is `fukuri-v2`
+- `manifest.json` — PWA manifest (name, icons, theme color, start_url)
+- `sw.js` — Service Worker: network-first for HTML, cache-first for JS/icons; cache key is `fukuri-v3`
 - `icon.svg` — app icon
+- `README.md` — Japanese user-facing documentation
+- `session-log.md` — development log
 
 ## Architecture
 
-Everything lives in `compound-interest.html`. There is no framework or bundler.
+Everything lives in `index.html`. There is no framework or bundler.
 
 **Slider logic:** Principal and monthly contribution use a piecewise log scale (`sliderToPrincipal`, `sliderToAdditional`) so the slider covers a wide range (¥10K–¥100M and ¥1K–¥500K respectively) with intuitive feel. Rate and years use a linear scale directly from the `<input type="range">` value.
 
@@ -28,13 +30,13 @@ Everything lives in `compound-interest.html`. There is no framework or bundler.
 
 ## Service Worker cache
 
-The SW cache is named `fukuri-v2`. To bust the cache after changes, increment this version string in `sw.js` and update the `ASSETS` array if new files are added.
+The SW cache is named `fukuri-v3`. To bust the cache after changes, increment this version string in `sw.js` and update the `ASSETS` array if new files are added.
 
 ## Running locally
 
 ```sh
 python3 -m http.server 8080
-# then open http://localhost:8080/compound-interest.html
+# then open http://localhost:8080/
 ```
 
-Service Workers require a server (won't register on `file://`).
+Service Workers require a server (won't register on `file://`). A `.claude/launch.json` is configured for use with the Claude Code preview tool.
