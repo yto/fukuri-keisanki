@@ -2,7 +2,7 @@
   "name": "複利計算機",
   "short_name": "複利計算機",
   "description": "元本・利率・期間から資産推移をシミュレーション",
-  "start_url": "./compound-interest.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f0f4f8",
   "theme_color": "#4299e1",
