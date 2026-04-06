@@ -1,6 +1,6 @@
-const CACHE = 'fukuri-v2';
+const CACHE = 'fukuri-v3';
 const ASSETS = [
-  './compound-interest.html',
+  './index.html',
   './manifest.json',
   './icon.svg',
   'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js',
