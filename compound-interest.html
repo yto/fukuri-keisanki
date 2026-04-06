@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>複利計算機</title>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#4299e1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="複利計算機">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Field rows — desktop: one shared grid across all fields */
+    .fields {
+      display: grid;
+      grid-template-columns: max-content 7rem 1fr;
+      column-gap: 0.6rem;
+      row-gap: 1.1rem;
+      align-items: center;
+    }
+
+    /* both wrappers dissolve into the grid */
+    .field        { display: contents; }
+    .field-header { display: contents; }
+
+    .field label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #4a5568;
+      white-space: nowrap;
+    }
+
+    .field .val {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #2b6cb0;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* Slider */
+    input[type="range"] {
+      width: 100%;
+      accent-color: #4299e1;
+      cursor: pointer;
+      height: 6px;
+    }
+
+    /* Buttons row */
+    .btn-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.2rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.65rem 1rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-reset { background: #e2e8f0; color: #4a5568; }
+    .btn-reset:hover { background: #cbd5e0; }
+
+    /* Summary */
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+
+    .summary-item {
+      background: #ebf8ff;
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .summary-item .label {
+      font-size: 0.8rem;
+      color: #2b6cb0;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+
+    .summary-item .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1a365d;
+    }
+
+    /* Chart */
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      height: 300px;
+    }
+
+    canvas { display: block; width: 100% !important; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+
+    th {
+      background: #ebf8ff;
+      color: #2b6cb0;
+      font-weight: 700;
+      padding: 0.6rem 0.8rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child { text-align: center; }
+
+    td {
+      padding: 0.55rem 0.8rem;
+      text-align: right;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    td:first-child { text-align: center; font-weight: 600; color: #4a5568; }
+
+    tr:hover td { background: #f7fafc; }
+
+    .hidden { display: none; }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 600px) {
+      .card-form {
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      .card-form .btn-row {
+        padding: 0 1.5rem;
+        margin-top: 1.8rem;
+      }
+
+      /* mobile: stack each field vertically */
+      .fields {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .field-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 1.5rem;
+        margin-bottom: 0.3rem;
+      }
+
+      .field input[type="range"] {
+        width: calc(100% - 3rem);
+        margin: 0 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+    <div class="section-title">資産推移グラフ</div>
+    <div class="chart-wrap">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="card card-form">
+    <div class="fields">
+
+      <div class="field">
+        <div class="field-header">
+          <label>元本 (円)</label>
+          <span class="val" id="principal">0</span>
+        </div>
+        <input type="range" id="principal-range" min="0" max="500" step="1" value="0"
+               oninput="syncFromRange('principal')">
+      </div>
+
+      <div class="field">
+        <div class="field-header">
+          <label>年利率 (%)</label>
+          <span class="val" id="rate">0</span>
+        </div>
+        <input type="range" id="rate-range" min="0" max="30" step="0.1" value="0"
+               oninput="syncFromRange('rate')">
+      </div>
+
+      <div class="field">
+        <div class="field-header">
+          <label>運用期間 (年)</label>
+          <span class="val" id="years">0</span>
+        </div>
+        <input type="range" id="years-range" min="0" max="50" step="1" value="0"
+               oninput="syncFromRange('years')">
+      </div>
+
+      <div class="field">
+        <div class="field-header">
+          <label>追加積立 (円/月)<br><span id="additional-annual" style="font-weight:400;color:#718096;font-size:0.78rem;">年: 0 円</span></label>
+          <span class="val" id="additional">0</span>
+        </div>
+        <input type="range" id="additional-range" min="0" max="500" step="1" value="0"
+               oninput="syncFromRange('additional')">
+      </div>
+
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-reset" onclick="resetAll()">初期値</button>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="card">
+      <div class="summary" id="summary"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">年別一覧</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>年</th>
+              <th>元本累計</th>
+              <th>運用益累計</th>
+              <th>合計資産</th>
+              <th>前年比</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let chartInstance = null;
+
+  const DEFAULTS = {
+    principal: 310,
+    rate: 5,
+    years: 10,
+    additional: 163,
+  };
+
+  function logSlider(s, logMin, logMax) {
+    s = parseInt(s);
+    if (s <= 0) return 0;
+    const logVal = logMin + (s - 1) / 499 * (logMax - logMin);
+    const raw = Math.pow(10, logVal);
+    const magnitude = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+    return Math.round(raw / magnitude) * magnitude;
+  }
+
+  // 元本: 1万〜1億、中央(250)≒500万（区分線形対数）
+  function sliderToPrincipal(s) {
+    s = parseInt(s);
+    if (s <= 0) return 0;
+    const logVal = s <= 250
+      ? 4 + (s - 1) / 249 * 2.699      // 10,000 → 5,000,000
+      : 6.699 + (s - 250) / 250 * 1.301; // 5,000,000 → 100,000,000
+    const raw = Math.pow(10, logVal);
+    const magnitude = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+    return Math.round(raw / magnitude) * magnitude;
+  }
+  // 追加積立: 1,000〜500,000、中央(250)≒100,000（区分線形対数）
+  function sliderToAdditional(s) {
+    s = parseInt(s);
+    if (s <= 0) return 0;
+    const logVal = s <= 250
+      ? 3 + (s - 1) / 249 * 2          // 1,000 → 100,000
+      : 5 + (s - 250) / 250 * 0.699;   // 100,000 → 500,000
+    const raw = Math.pow(10, logVal);
+    const magnitude = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+    return Math.round(raw / magnitude) * magnitude;
+  }
+
+  function formatDisplay(id, v) {
+    const isYen = (id === 'principal' || id === 'additional');
+    document.getElementById(id).textContent = isYen
+      ? Math.round(v).toLocaleString('ja-JP')
+      : v;
+  }
+
+  function updateDisplay(id) {
+    const s = parseFloat(document.getElementById(id + '-range').value);
+    const v = id === 'principal'   ? sliderToPrincipal(s)
+            : id === 'additional'  ? sliderToAdditional(s)
+            : s;
+    formatDisplay(id, v);
+  }
+
+  function saveToStorage() {
+    const data = {};
+    for (const id of Object.keys(DEFAULTS)) {
+      data[id] = document.getElementById(id + '-range').value;
+    }
+    localStorage.setItem('fukuri', JSON.stringify(data));
+  }
+
+  function loadFromStorage() {
+    try {
+      const data = JSON.parse(localStorage.getItem('fukuri'));
+      if (!data) return false;
+      for (const id of Object.keys(DEFAULTS)) {
+        if (data[id] !== undefined) {
+          document.getElementById(id + '-range').value = data[id];
+          updateDisplay(id);
+        }
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function syncFromRange(id) {
+    updateDisplay(id);
+    saveToStorage();
+    calculate();
+  }
+
+  function resetAll() {
+    for (const [id, val] of Object.entries(DEFAULTS)) {
+      document.getElementById(id + '-range').value = val;
+      updateDisplay(id);
+    }
+    saveToStorage();
+    calculate();
+  }
+
+  function fmt(n) {
+    return Math.round(n).toLocaleString('ja-JP') + ' 円';
+  }
+
+  function fmtShort(n) {
+    if (Math.abs(n) >= 1e8) return (n / 1e8).toFixed(1) + '億円';
+    if (Math.abs(n) >= 1e4) return (n / 1e4).toFixed(1) + '万円';
+    return Math.round(n).toLocaleString() + '円';
+  }
+
+  function calculate() {
+    const principal  = sliderToPrincipal(document.getElementById('principal-range').value);
+    const rate       = parseFloat(document.getElementById('rate-range').value) / 100 || 0;
+    const years      = parseInt(document.getElementById('years-range').value) || 0;
+    const additionalMonthly = sliderToAdditional(document.getElementById('additional-range').value);
+    const additional = additionalMonthly * 12;
+    document.getElementById('additional-annual').textContent = '年: ' + Math.round(additional).toLocaleString() + ' 円';
+
+    if (years < 1 || principal < 0) return;
+
+    const labels = [], principalData = [], interestData = [], rows = [];
+    let balance = principal, invested = principal, prevBalance = principal;
+
+    for (let y = 1; y <= years; y++) {
+      balance = balance * (1 + rate) + additional;
+      invested += additional;
+      const interest = balance - invested;
+      const growth = y === 1 ? null : balance - prevBalance;
+
+      labels.push(y + '年');
+      principalData.push(Math.round(invested));
+      interestData.push(Math.round(interest));
+      rows.push({ y, invested, interest, balance, growth });
+      prevBalance = balance;
+    }
+
+    // Summary
+    const totalInterest = balance - invested;
+    const multi = invested > 0 ? balance / invested : 0;
+    document.getElementById('summary').innerHTML = `
+      <div class="summary-item"><div class="label">最終資産</div><div class="value">${fmtShort(balance)}</div></div>
+      <div class="summary-item"><div class="label">元本累計</div><div class="value">${fmtShort(invested)}</div></div>
+      <div class="summary-item"><div class="label">運用益累計</div><div class="value">${fmtShort(totalInterest)}</div></div>
+      <div class="summary-item"><div class="label">元本比</div><div class="value">${multi.toFixed(2)}倍</div></div>
+    `;
+
+    // Table
+    document.getElementById('tbody').innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.y}</td>
+        <td>${fmt(r.invested)}</td>
+        <td>${fmt(r.interest)}</td>
+        <td>${fmt(r.balance)}</td>
+        <td>${r.growth === null ? '-' : '+' + fmt(r.growth)}</td>
+      </tr>
+    `).join('');
+
+    // Chart
+    if (chartInstance) chartInstance.destroy();
+    const ctx = document.getElementById('chart').getContext('2d');
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: '元本累計', data: principalData, backgroundColor: 'rgba(66,153,225,0.75)', stack: 'stack' },
+          { label: '運用益累計', data: interestData,  backgroundColor: 'rgba(72,187,120,0.85)', stack: 'stack' },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: c => ` ${c.dataset.label}: ${Math.round(c.raw).toLocaleString()} 円`,
+              footer: items => ` 合計: ${items.reduce((s, i) => s + i.raw, 0).toLocaleString()} 円`,
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, ticks: { callback: v => fmtShort(v) } },
+        },
+      },
+    });
+
+    document.getElementById('results').classList.remove('hidden');
+  }
+
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
+  script.onload = () => { if (!loadFromStorage()) resetAll(); else calculate(); };
+  document.head.appendChild(script);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+
+</script>
+</body>
+</html>
