@@ -38,4 +38,4 @@
 
 - フレームワーク・ビルドツールなし（HTML + CSS + JavaScript のみ）
 - グラフ描画: [Chart.js](https://www.chartjs.org/)
-- 開発の過程は [`session-log.md`](./session-log.md) に記録されています
+- 開発の過程は [`session-log.md`](./session-log.md) に記録されています（途中まで）
