@@ -456,6 +456,7 @@
           legend: { position: 'top' },
           tooltip: {
             mode: 'index',
+            itemSort: (a, b) => b.datasetIndex - a.datasetIndex,
             callbacks: {
               label: c => ` ${c.dataset.label}: ${Math.round(c.raw).toLocaleString()} 円`,
               footer: items => ` 合計: ${items.reduce((s, i) => s + i.raw, 0).toLocaleString()} 円`,
