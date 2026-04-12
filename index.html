@@ -455,6 +455,7 @@
         plugins: {
           legend: { position: 'top' },
           tooltip: {
+            mode: 'index',
             callbacks: {
               label: c => ` ${c.dataset.label}: ${Math.round(c.raw).toLocaleString()} 円`,
               footer: items => ` 合計: ${items.reduce((s, i) => s + i.raw, 0).toLocaleString()} 円`,
