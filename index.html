@@ -157,6 +157,14 @@
 
     tr:hover td { background: #f7fafc; }
 
+    .sigma-range {
+      font-size: 0.72rem;
+      color: #718096;
+      margin-top: 0.25rem;
+      line-height: 1.5;
+    }
+    .sigma-range span { display: block; }
+
     .hidden { display: none; }
 
     .section-title {
@@ -212,6 +220,15 @@
     <div class="chart-wrap">
       <canvas id="chart"></canvas>
     </div>
+    <div id="risk-legend" style="display:none; text-align:center; font-size:0.73rem; color:#718096; margin-top:0.5rem;">
+      <span style="display:inline-flex;align-items:center;gap:0.3em;margin-right:0.8em;">
+        <span style="display:inline-block;width:13px;height:9px;background:rgba(22,101,52,0.18);border:1.5px solid rgba(22,101,52,0.65);"></span>±1σ
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:0.3em;">
+        <span style="display:inline-block;width:1.5px;height:13px;background:rgba(22,101,52,0.5);"></span>±2σ
+      </span>
+      &nbsp;の年利変動幅
+    </div>
   </div>
 
   <div class="card card-form">
@@ -253,6 +270,15 @@
                oninput="syncFromRange('additional')">
       </div>
 
+      <div class="field">
+        <div class="field-header">
+          <label>リスク (年利のブレ幅 σ)</label>
+          <span class="val" id="risk">±0.0%</span>
+        </div>
+        <input type="range" id="risk-range" min="0" max="20" step="0.5" value="0"
+               oninput="syncFromRange('risk')">
+      </div>
+
     </div>
 
     <div class="btn-row">
@@ -287,6 +313,7 @@
 
 <script>
   let chartInstance = null;
+  let riskData = [];
 
   // 元本目盛: 0, 1万〜10万(5000刻み), 10万〜100万(5万刻み), 100万〜1000万(50万刻み), 1000万〜1億(500万刻み)
   // インデックス: 0〜73 (計74目盛)
@@ -308,6 +335,7 @@
     rate: 5,
     years: 10,
     additional: 12, // 2万/月
+    risk: 0,        // 年利ブレ幅 σ = 0%
   };
 
   function sliderToPrincipal(s) {
@@ -319,6 +347,10 @@
 
   function formatDisplay(id, v) {
     const isYen = (id === 'principal' || id === 'additional');
+    if (id === 'risk') {
+      document.getElementById(id).textContent = '±' + parseFloat(v).toFixed(1) + '%';
+      return;
+    }
     document.getElementById(id).textContent = isYen
       ? Math.round(v).toLocaleString('ja-JP')
       : v;
@@ -347,8 +379,8 @@
       for (const id of Object.keys(DEFAULTS)) {
         if (data[id] !== undefined) {
           document.getElementById(id + '-range').value = data[id];
-          updateDisplay(id);
         }
+        updateDisplay(id); // ストレージにないキーもHTML既定値で表示を更新
       }
       return true;
     } catch (e) { return false; }
@@ -369,6 +401,54 @@
     calculate();
   }
 
+  const riskBandsPlugin = {
+    id: 'riskBands',
+    afterDatasetsDraw(chart) {
+      if (!riskData.length) return;
+      const { ctx, scales: { y }, chartArea } = chart;
+      const interestMeta = chart.getDatasetMeta(1); // 運用益累計
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+      ctx.clip();
+
+      riskData.forEach((d, i) => {
+        if (d.s2hi === d.s2lo) return; // risk=0、描画不要
+        const bar = interestMeta.data[i];
+        if (!bar) return;
+        const x = bar.x;
+        const hw = Math.min(bar.width * 0.3, 7);   // 箱の半幅
+        const tw = Math.min(bar.width * 0.45, 11);  // ひげキャップ半幅
+
+        const yBase = d.principalVal;
+        const y2lo = y.getPixelForValue(yBase + d.s2lo);
+        const y2hi = y.getPixelForValue(yBase + d.s2hi);
+        const y1lo = y.getPixelForValue(yBase + d.s1lo);
+        const y1hi = y.getPixelForValue(yBase + d.s1hi);
+
+        // ±2σ ひげ線
+        ctx.strokeStyle = 'rgba(22,101,52,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, y2lo); ctx.lineTo(x, y2hi); ctx.stroke();
+
+        // ±2σ キャップ
+        for (const yc of [y2lo, y2hi]) {
+          ctx.beginPath(); ctx.moveTo(x - tw, yc); ctx.lineTo(x + tw, yc); ctx.stroke();
+        }
+
+        // ±1σ 箱
+        ctx.fillStyle = 'rgba(22,101,52,0.18)';
+        ctx.fillRect(x - hw, y1hi, hw * 2, y1lo - y1hi);
+        ctx.strokeStyle = 'rgba(22,101,52,0.65)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x - hw, y1hi, hw * 2, y1lo - y1hi);
+      });
+
+      ctx.restore();
+    }
+  };
+
   function fmt(n) {
     return Math.round(n).toLocaleString('ja-JP') + ' 円';
   }
@@ -385,12 +465,15 @@
     const years      = parseInt(document.getElementById('years-range').value) || 0;
     const additionalMonthly = sliderToAdditional(document.getElementById('additional-range').value);
     const additional = additionalMonthly * 12;
+    const risk       = parseFloat(document.getElementById('risk-range').value) / 100 || 0;
     document.getElementById('additional-annual').textContent = '年: ' + Math.round(additional).toLocaleString() + ' 円';
 
     if (years < 1 || principal < 0) return;
 
     const labels = [], principalData = [], interestData = [], rows = [];
+    riskData = [];
     let balance = principal, invested = principal, prevBalance = principal;
+    let yAxisMax = 0;
 
     for (let y = 1; y <= years; y++) {
       balance = balance * (1 + rate) + additional;
@@ -403,7 +486,20 @@
       interestData.push(Math.round(interest));
       rows.push({ y, invested, interest, balance, growth });
       prevBalance = balance;
+
+      // σ範囲を計算（対数正規分布モデル: 不確実性は実効運用期間Dの√に比例）
+      // D = 加重平均運用期間（元本はy年、各積立はそれぞれの残り期間）
+      const D = invested > 0
+        ? (principal * y + additional * y * (y - 1) / 2) / invested
+        : y;
+      const s1hi = balance * Math.exp(+1 * risk * Math.sqrt(D)) - invested;
+      const s1lo = balance * Math.exp(-1 * risk * Math.sqrt(D)) - invested;
+      const s2hi = balance * Math.exp(+2 * risk * Math.sqrt(D)) - invested;
+      const s2lo = balance * Math.exp(-2 * risk * Math.sqrt(D)) - invested;
+      riskData.push({ principalVal: invested, s1lo, s1hi, s2lo, s2hi });
+      yAxisMax = Math.max(yAxisMax, invested + s2hi);
     }
+    document.getElementById('risk-legend').style.display = risk > 0 ? '' : 'none';
 
     // Summary
     const totalInterest = balance - invested;
@@ -416,15 +512,45 @@
     `;
 
     // Table
-    document.getElementById('tbody').innerHTML = rows.map(r => `
+    document.getElementById('tbody').innerHTML = rows.map((r, i) => {
+      const rd = riskData[i];
+      const prevRd = i > 0 ? riskData[i - 1] : null;
+      const showSigma = risk > 0 && rd;
+
+      const interestSigma = showSigma ? `
+        <div class="sigma-range">
+          <span>1σ: ${fmtShort(rd.s1lo)}〜${fmtShort(rd.s1hi)}</span>
+          <span>2σ: ${fmtShort(rd.s2lo)}〜${fmtShort(rd.s2hi)}</span>
+        </div>` : '';
+
+      const balanceSigma = showSigma ? `
+        <div class="sigma-range">
+          <span>1σ: ${fmtShort(rd.principalVal + rd.s1lo)}〜${fmtShort(rd.principalVal + rd.s1hi)}</span>
+          <span>2σ: ${fmtShort(rd.principalVal + rd.s2lo)}〜${fmtShort(rd.principalVal + rd.s2hi)}</span>
+        </div>` : '';
+
+      let growthSigma = '';
+      if (showSigma && prevRd && r.growth !== null) {
+        const g1lo = (rd.principalVal + rd.s1lo) - (prevRd.principalVal + prevRd.s1lo);
+        const g1hi = (rd.principalVal + rd.s1hi) - (prevRd.principalVal + prevRd.s1hi);
+        const g2lo = (rd.principalVal + rd.s2lo) - (prevRd.principalVal + prevRd.s2lo);
+        const g2hi = (rd.principalVal + rd.s2hi) - (prevRd.principalVal + prevRd.s2hi);
+        growthSigma = `
+        <div class="sigma-range">
+          <span>1σ: ${fmtShort(g1lo)}〜${fmtShort(g1hi)}</span>
+          <span>2σ: ${fmtShort(g2lo)}〜${fmtShort(g2hi)}</span>
+        </div>`;
+      }
+
+      return `
       <tr>
         <td>${r.y}</td>
         <td>${fmt(r.invested)}</td>
-        <td>${fmt(r.interest)}</td>
-        <td>${fmt(r.balance)}</td>
-        <td>${r.growth === null ? '-' : '+' + fmt(r.growth)}</td>
-      </tr>
-    `).join('');
+        <td>${fmt(r.interest)}${interestSigma}</td>
+        <td>${fmt(r.balance)}${balanceSigma}</td>
+        <td>${r.growth === null ? '-' : '+' + fmt(r.growth)}${growthSigma}</td>
+      </tr>`;
+    }).join('');
 
     // Chart
     if (chartInstance) chartInstance.destroy();
@@ -455,9 +581,10 @@
         },
         scales: {
           x: { stacked: true, grid: { display: false } },
-          y: { stacked: true, ticks: { callback: v => fmtShort(v) } },
+          y: { stacked: true, suggestedMax: yAxisMax > 0 ? yAxisMax * 1.03 : undefined, ticks: { callback: v => fmtShort(v) } },
         },
       },
+      plugins: [riskBandsPlugin],
     });
 
     document.getElementById('results').classList.remove('hidden');
