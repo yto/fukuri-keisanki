@@ -157,6 +157,46 @@
 
     tr:hover td { background: #f7fafc; }
 
+    .info-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.1em;
+      height: 1.1em;
+      font-size: 1em;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+      vertical-align: middle;
+      opacity: 0.7;
+      line-height: 1;
+    }
+    .info-btn:hover { opacity: 1; }
+
+    .tooltip-wrap {
+      position: relative;
+      display: inline-block;
+    }
+
+    .tooltip-box {
+      display: none;
+      position: fixed;
+      width: min(240px, calc(100vw - 2rem));
+      background: #2d3748;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 400;
+      line-height: 1.6;
+      border-radius: 8px;
+      padding: 0.7rem 0.85rem;
+      z-index: 200;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      white-space: normal;
+      pointer-events: none;
+    }
+    .tooltip-wrap.open .tooltip-box { display: block; }
+
     .sigma-range {
       font-size: 0.72rem;
       color: #718096;
@@ -272,7 +312,21 @@
 
       <div class="field">
         <div class="field-header">
-          <label>リスク (年利のブレ幅 σ)</label>
+          <label>リスク (年利のブレ幅 σ)
+            <span class="tooltip-wrap" id="risk-tooltip-wrap">
+              <button class="info-btn" onclick="toggleTooltip(event)" aria-label="σの説明">ℹ️</button>
+              <div class="tooltip-box">
+                σ（標準偏差）は年利のブレ幅の目安です。<br>
+                <br>
+                📊 実際の利回りがこの範囲に収まる確率：<br>
+                　±1σ（箱）→ 約68%（2/3）<br>
+                　±2σ（ひげ）→ 約95%<br>
+                <br>
+                例：年利5%・σ=10%なら<br>
+                2/3の確率で年利 −5〜+15% の範囲に収まります。
+              </div>
+            </span>
+          </label>
           <span class="val" id="risk">±0.0%</span>
         </div>
         <input type="range" id="risk-range" min="0" max="30" step="0.5" value="0"
@@ -594,6 +648,27 @@
   script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
   script.onload = () => { if (!loadFromStorage()) resetAll(); else calculate(); };
   document.head.appendChild(script);
+
+  function toggleTooltip(e) {
+    e.stopPropagation();
+    const wrap = document.getElementById('risk-tooltip-wrap');
+    const isOpen = !wrap.classList.contains('open');
+    wrap.classList.toggle('open', isOpen);
+    if (isOpen) {
+      const btn = wrap.querySelector('.info-btn');
+      const box = wrap.querySelector('.tooltip-box');
+      const r = btn.getBoundingClientRect();
+      const bw = box.offsetWidth || 240;
+      let left = r.left;
+      if (left + bw > window.innerWidth - 8) left = window.innerWidth - 8 - bw;
+      if (left < 8) left = 8;
+      box.style.top  = (r.bottom + 6) + 'px';
+      box.style.left = left + 'px';
+    }
+  }
+  document.addEventListener('click', () => {
+    document.getElementById('risk-tooltip-wrap').classList.remove('open');
+  });
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');
